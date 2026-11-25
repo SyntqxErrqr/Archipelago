@@ -12,9 +12,14 @@ that:
 * the level select asks the AP table whether a level is unlocked (written by the client from received items),
 * the main menu asks the AP table whether zones 2 and 3 can be entered,
 * finishing a level writes the cleared / perfect / bonus flags into the AP table instead of the save,
-* the "PERFECT" markers on the level select read the AP table, so they show progress in this seed.
+* the "PERFECT" markers on the level select read the AP table, so they show progress in this seed,
+* the player's move check (can I slide yet?) reads the AP table instead of the save.
 
 The real save file is never written by the client, so a player's vanilla progress survives a randomizer run untouched.
+
+Moves: the game gives each move an "unlock level" in a small (zone, level) table, and allows the move once that level
+has been reached in the save. The client points every move at its own pair of records and sets a flag in those records
+when the move has been received. Jump has no unlock level in vanilla; the client gives it one so it can be locked too.
 
 The game also auto-advances to the next level after finishing one. The client rewrites the game's next-level table so
 that it only ever advances into levels that are unlocked.
@@ -59,6 +64,28 @@ K_CLEARED = 4
 K_PERFECT = 5  # Must be K_CLEARED + 1: the level-complete code writes "perfect" relative to the "cleared" pointer.
 K_BONUS = 6  # Must be K_CLEARED + 2: the level select reads "bonus" relative to the "cleared" pointer.
 K_ZONE_UNLOCKED = 8  # Only meaningful in the first record of zones 2 and 3.
+K_ABILITY = 9  # Only meaningful in the records named by ABILITY_GATE_LEVELS.
+
+ABILITY_UNLOCK_TABLE_ADDRESS = 0x52A198
+"""
+One (s32 zone, s32 level) pair per move: Jump, Slide, Kick, Spring, Block. (-1, -1) means "always allowed".
+Vanilla: Jump (-1, -1), Slide 1-3, Kick 1-5, Spring 1-7, Block 3-1.
+"""
+
+ABILITY_GATE_LEVELS: tuple[tuple[int, int], ...] = ((0, 8), (0, 2), (0, 4), (0, 6), (2, 0))
+"""
+The (zone, level) the client writes into the unlock table for each move. The game allows a move if that level's record
+is flagged, or if the record of the level before it is, so the client flags both. No two moves share a record.
+Slide to Block keep their vanilla levels; Jump borrows 1-9.
+"""
+
+
+def ability_gate_records(ability: int) -> tuple[int, int]:
+    """The two level indices (0-35) whose K_ABILITY byte grants a move."""
+    zone, level = ABILITY_GATE_LEVELS[ability]
+    own = zone * LEVELS_PER_ZONE + level
+    # The level before the first level of a zone is the previous zone's boss.
+    return own, own - 1
 
 AP_BLOCK_SIZE = 0x1000
 AP_HEADER_SIZE = 0x40
@@ -108,6 +135,9 @@ DISPLACEMENT_PATCHES: tuple[DisplacementPatch, ...] = (
     # Level complete: set "bonus perfect" after a bonus stage, "cleared" (+ "perfect") after a normal level.
     DisplacementPatch(0x418671, b"\xC6\x04\x95" + _disp(0x5BAD2E) + b"\x01", 3, K_BONUS),
     DisplacementPatch(0x41869D, b"\x8D\x04\x95" + _disp(0x5BAD2C), 3, K_CLEARED),
+    # Move check: "has this move's unlock level (or the one before it) been reached?" Vanilla reads cleared flags.
+    DisplacementPatch(0x424501, b"\x80\x3C\xB5" + _disp(0x5BAD2C) + b"\x00", 3, K_ABILITY),
+    DisplacementPatch(0x42453B, b"\x80\x3C\x95" + _disp(0x5BAD2C) + b"\x00", 3, K_ABILITY),
 )
 
 # Vanilla never treats 1-1 as locked (it returns early). Turning that branch into an unconditional jump sends 1-1
@@ -415,30 +445,38 @@ class RunnerProcess:
             return False
 
     def install(self) -> None:
-        """Apply the AP patches (or adopt the ones a previous client session already applied)."""
-        existing_table = self._existing_table()
-        if existing_table is not None:
-            header = self.read(existing_table - AP_HEADER_SIZE, len(AP_MAGIC))
+        """
+        Apply the AP patches, or adopt the table a previous client session already set up in this process.
+        Patch sites an older client version didn't know about are patched either way.
+        """
+        table = self._existing_table()
+        if table is not None:
+            header = self.read(table - AP_HEADER_SIZE, len(AP_MAGIC))
             if header != AP_MAGIC:
                 raise GameMemoryError("RUNNER.exe was patched by something else. Restart the game and try again.")
-            self.table_address = existing_table
-            return
-
-        block = self._allocate_low(AP_BLOCK_SIZE)
-        table = block + AP_HEADER_SIZE
-        self.write(block, AP_MAGIC)
+        else:
+            block = self._allocate_low(AP_BLOCK_SIZE)
+            table = block + AP_HEADER_SIZE
+            self.write(block, AP_MAGIC)
 
         _ntdll.NtSuspendProcess(self._handle)
         try:
             for patch in DISPLACEMENT_PATCHES:
                 address = self._rebase(patch.address) + patch.displacement_offset
-                self._write_code(address, struct.pack("<I", (table + patch.table_offset) & 0xFFFFFFFF))
+                wanted = struct.pack("<I", (table + patch.table_offset) & 0xFFFFFFFF)
+                if self.read(address, 4) != wanted:
+                    self._write_code(address, wanted)
             branch = self._rebase(FIRST_LEVEL_BRANCH_ADDRESS)
             if self.read(branch, 2) == FIRST_LEVEL_BRANCH_VANILLA:
                 self._write_code(branch, FIRST_LEVEL_BRANCH_PATCHED)
         finally:
             _ntdll.NtResumeProcess(self._handle)
         self.table_address = table
+
+        gates = b"".join(struct.pack("<ii", zone, level) for zone, level in ABILITY_GATE_LEVELS)
+        gate_address = self._rebase(ABILITY_UNLOCK_TABLE_ADDRESS)
+        if self.read(gate_address, len(gates)) != gates:
+            self.write(gate_address, gates)
 
     # ---- AP table --------------------------------------------------------------------------------------------------
 
@@ -475,6 +513,18 @@ class RunnerProcess:
                 )
         return flags
 
+    def _write_table_bytes(self, wanted: dict[int, int]) -> None:
+        """
+        Set single bytes of the AP table (keyed by offset from its start) that differ from what is wanted.
+
+        Single bytes rather than the whole table: the game may set a cleared flag between our read and our write, and
+        writing back a stale copy would erase it.
+        """
+        current = self.read_records()
+        for offset, value in wanted.items():
+            if current[offset] != value:
+                self.write(self.table_address + offset, bytes([value]))
+
     def write_unlocks(self, unlocked_levels: set[int], difficulties: set[int]) -> None:
         """Write which levels (0-35) can be played, on which difficulties (0-2)."""
         wanted: dict[int, int] = {}
@@ -487,13 +537,34 @@ class RunnerProcess:
                 offset = record_index(difficulty, zone * LEVELS_PER_ZONE) * RECORD_SIZE + K_ZONE_UNLOCKED
                 zone_levels = range(zone * LEVELS_PER_ZONE, (zone + 1) * LEVELS_PER_ZONE)
                 wanted[offset] = int(allowed and any(level in unlocked_levels for level in zone_levels))
+        self._write_table_bytes(wanted)
 
-        # Write single bytes rather than the whole table: the game may set a cleared flag between our read and our
-        # write, and writing back a stale copy would erase it.
+    def write_abilities(self, abilities: set[int], difficulties: set[int]) -> None:
+        """Write which moves (0 Jump, 1 Slide, 2 Kick, 3 Spring, 4 Block) can be used, on which difficulties."""
+        wanted: dict[int, int] = {}
+        for difficulty in range(DIFFICULTIES):
+            for ability in range(len(ABILITY_GATE_LEVELS)):
+                value = int(difficulty in difficulties and ability in abilities)
+                for level_index in ability_gate_records(ability):
+                    wanted[record_index(difficulty, level_index) * RECORD_SIZE + K_ABILITY] = value
+        self._write_table_bytes(wanted)
+
+    def restore_progress(self, cleared: set[int], perfect: set[int], bonus: set[int], difficulties: set[int]) -> None:
+        """
+        Put back cleared / PERFECT / bonus flags for levels (0-35) the server already has as checked.
+
+        The AP table only lives as long as the game process, so after a restart the level select would otherwise lose
+        its PERFECT markers. Flags are only ever set here, never cleared.
+        """
+        wanted: dict[int, int] = {}
+        for difficulty in difficulties:
+            for levels, flag in ((cleared, K_CLEARED), (perfect, K_PERFECT), (bonus, K_BONUS)):
+                for level_index in levels:
+                    wanted[record_index(difficulty, level_index) * RECORD_SIZE + flag] = 1
         current = self.read_records()
-        for offset, value in wanted.items():
-            if current[offset] != value:
-                self.write(self.table_address + offset, bytes([value]))
+        for offset in wanted:
+            if not current[offset]:
+                self.write(self.table_address + offset, b"\x01")
 
     def write_next_levels(self, next_levels: list[tuple[int, int]]) -> None:
         """Rewrite the game's "level that follows this one" table: 36 (world, level) pairs."""

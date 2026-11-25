@@ -11,6 +11,7 @@ from NetUtils import ClientStatus
 from Utils import gui_enabled
 
 from ..data import (
+    ABILITIES,
     FINAL_LEVEL_INDEX,
     GAME_NAME,
     ITEM_ID_RAINBOW_FRAGMENT,
@@ -18,7 +19,10 @@ from ..data import (
     LOCATION_ID_BONUS_BASE,
     LOCATION_ID_CLEAR_BASE,
     LOCATION_ID_PERFECT_BASE,
+    abilities_required,
+    checked_level_flags,
     next_level_table,
+    received_ability_numbers,
     unlocked_level_indices,
 )
 from . import game_memory
@@ -39,11 +43,16 @@ class BitTripRunnerCommandProcessor(ClientCommandProcessor):
         if not self.ctx.slot_data:
             logger.info("Connect to a BIT.TRIP RUNNER slot first.")
             return False
+        self._cmd_abilities()
         unlocked = self.ctx.unlocked_levels()
+        abilities = self.ctx.abilities()
         checked = self.ctx.checked_locations | self.ctx.locations_checked
         for level in LEVELS:
             state = "unlocked" if level.index in unlocked else "locked"
             parts = [f"{level.full_name}: {state}"]
+            missing = [name for name in abilities_required(level) if ABILITIES.index(name) not in abilities]
+            if missing:
+                parts.append(f"needs {', '.join(missing)}")
             if level.index == FINAL_LEVEL_INDEX:
                 fragments = self.ctx.received_ids().count(ITEM_ID_RAINBOW_FRAGMENT)
                 parts.append(f"{fragments}/{self.ctx.slot_data['rainbow_fragments_required']} Rainbow Fragments")
@@ -55,6 +64,17 @@ class BitTripRunnerCommandProcessor(ClientCommandProcessor):
                 if LOCATION_ID_BONUS_BASE + level.index in checked:
                     parts.append("bonus perfect")
             logger.info(", ".join(parts))
+        return True
+
+    def _cmd_abilities(self) -> bool:
+        """List which of CommanderVideo's moves you have."""
+        if not self.ctx.slot_data:
+            logger.info("Connect to a BIT.TRIP RUNNER slot first.")
+            return False
+        abilities = self.ctx.abilities()
+        have = [name for number, name in enumerate(ABILITIES) if number in abilities]
+        missing = [name for number, name in enumerate(ABILITIES) if number not in abilities]
+        logger.info(f"Moves: {', '.join(have) or 'none'}" + (f" (missing {', '.join(missing)})" if missing else ""))
         return True
 
     def _cmd_game(self) -> bool:
@@ -107,6 +127,13 @@ class BitTripRunnerContext(CommonContext):
         assert self.slot_data is not None
         return unlocked_level_indices(self.received_ids(), self.slot_data["rainbow_fragments_required"])
 
+    def abilities(self) -> set[int]:
+        assert self.slot_data is not None
+        if "start_with_jump" not in self.slot_data:
+            # Seed from before moves were shuffled: every move is available.
+            return set(range(len(ABILITIES)))
+        return received_ability_numbers(self.received_ids())
+
     def allowed_difficulties(self) -> set[int]:
         assert self.slot_data is not None
         return set(range(self.slot_data.get("minimum_difficulty", 0), game_memory.DIFFICULTIES))
@@ -150,9 +177,13 @@ class BitTripRunnerContext(CommonContext):
             self.runner_ready = True
             self.set_status("Hooked into BIT.TRIP RUNNER. Levels you have unlocked are open in the level select.")
 
+        difficulties = self.allowed_difficulties()
         unlocked = self.unlocked_levels()
-        self.runner.write_unlocks(unlocked, self.allowed_difficulties())
+        self.runner.write_unlocks(unlocked, difficulties)
+        self.runner.write_abilities(self.abilities(), difficulties)
         self.runner.write_next_levels(next_level_table(unlocked))
+        # The table starts empty in a freshly started game; put back the markers for checks the server already has.
+        self.runner.restore_progress(*checked_level_flags(self.checked_locations), difficulties)
         await self.report_progress()
 
     async def report_progress(self) -> None:

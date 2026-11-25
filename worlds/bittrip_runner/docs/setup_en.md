@@ -29,7 +29,9 @@ running while you play: it is what notices that you cleared a level and sends th
 
 ## Client commands
 
-- `/levels` lists every level with whether it is unlocked, cleared, PERFECT and bonus PERFECT.
+- `/levels` lists your moves, then every level with whether it is unlocked, which moves it still needs, and whether it
+  is cleared, PERFECT and bonus PERFECT.
+- `/abilities` lists which of CommanderVideo's moves you have.
 - `/game` shows whether the client is hooked into the game.
 
 ## Troubleshooting
@@ -40,3 +42,5 @@ running while you play: it is what notices that you cleared a level and sends th
   recognize, so it left the game alone. Verify the game files in Steam and try again.
 - **Levels are back to normal after restarting the game.** The client has to be running to lock levels. Start the
   client and connect again.
+- **A button does nothing in a level.** That move hasn't been received yet; `/abilities` shows which moves you have.
+  The game still shows its tutorial prompts for moves you don't have.

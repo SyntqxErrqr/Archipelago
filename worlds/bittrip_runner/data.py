@@ -73,10 +73,30 @@ RAINBOW_FRAGMENT = "Rainbow Fragment"
 GOLD_BAR = "Gold Bar"
 VICTORY = "Victory"
 
+JUMP = "Jump"
+ABILITIES = (JUMP, "Slide", "Kick", "Spring", "Block")
+"""CommanderVideo's moves, in the order RUNNER.exe numbers them."""
+
+ABILITY_INTRODUCED_AT: dict[str, int] = {JUMP: 0, "Slide": 2, "Kick": 4, "Spring": 6, "Block": 24}
+"""
+Index of the level where the vanilla game hands out each move: Jump from the start, Slide at 1-3, Kick at 1-5,
+Spring at 1-7 and Block at 3-1. Every vanilla level is beatable with the moves it has by then, so a level needs
+every move introduced at or before it.
+"""
+
+
+def abilities_required(level: Level) -> tuple[str, ...]:
+    return tuple(ability for ability in ABILITIES if level.index >= ABILITY_INTRODUCED_AT[ability])
+
+
+JUMP_ONLY_LEVELS = tuple(level for level in LEVELS if abilities_required(level) == (JUMP,))
+"""1-1 and 1-2, the only levels that can be cleared with nothing but Jump."""
+
 # ---- ids -------------------------------------------------------------------------------------------------------------
 
 ITEM_ID_RAINBOW_FRAGMENT = 1
 ITEM_ID_GOLD_BAR = 2
+ITEM_ID_ABILITY_BASE = 10
 ITEM_ID_LEVEL_BASE = 100
 
 LOCATION_ID_CLEAR_BASE = 100
@@ -103,6 +123,7 @@ def bonus_location_name(level: Level) -> str:
 ITEM_NAME_TO_ID: dict[str, int] = {
     RAINBOW_FRAGMENT: ITEM_ID_RAINBOW_FRAGMENT,
     GOLD_BAR: ITEM_ID_GOLD_BAR,
+    **{ability: ITEM_ID_ABILITY_BASE + number for number, ability in enumerate(ABILITIES)},
     **{level_item_name(level): ITEM_ID_LEVEL_BASE + level.index for level in UNLOCKABLE_LEVELS},
 }
 
@@ -113,6 +134,7 @@ LOCATION_NAME_TO_ID: dict[str, int] = {
 }
 
 LEVEL_BY_ITEM_ID: dict[int, Level] = {ITEM_ID_LEVEL_BASE + level.index: level for level in UNLOCKABLE_LEVELS}
+LEVEL_ITEM_NAMES = frozenset(level_item_name(level) for level in UNLOCKABLE_LEVELS)
 
 
 # ---- client helpers --------------------------------------------------------------------------------------------------
@@ -123,6 +145,19 @@ def unlocked_level_indices(received_item_ids: list[int], fragments_required: int
     if received_item_ids.count(ITEM_ID_RAINBOW_FRAGMENT) >= fragments_required:
         unlocked.add(FINAL_LEVEL_INDEX)
     return unlocked
+
+
+def received_ability_numbers(received_item_ids: list[int]) -> set[int]:
+    """Which moves (0 Jump, 1 Slide, 2 Kick, 3 Spring, 4 Block) the player has, given every item id received."""
+    return {item - ITEM_ID_ABILITY_BASE for item in received_item_ids
+            if ITEM_ID_ABILITY_BASE <= item < ITEM_ID_ABILITY_BASE + len(ABILITIES)}
+
+
+def checked_level_flags(checked_location_ids: set[int]) -> tuple[set[int], set[int], set[int]]:
+    """Split checked location ids into the levels (by index) that were cleared, PERFECTed and bonus PERFECTed."""
+    def levels(base: int) -> set[int]:
+        return {location - base for location in checked_location_ids if base <= location < base + len(LEVELS)}
+    return levels(LOCATION_ID_CLEAR_BASE), levels(LOCATION_ID_PERFECT_BASE), levels(LOCATION_ID_BONUS_BASE)
 
 
 ENDING_WORLD = 6

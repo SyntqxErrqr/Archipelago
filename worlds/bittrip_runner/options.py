@@ -5,13 +5,24 @@ from Options import Choice, DefaultOnToggle, OptionGroup, PerGameCommonOptions, 
 
 class StartingLevels(Range):
     """
-    How many random Impetus (zone 1) levels you can play from the start.
-    The boss level, Mingrawn Timbletot, is never picked.
+    How many Impetus (zone 1) levels you can play from the start.
+    1-1 and 1-2 are always picked first, since they are the only levels you can clear with just Jump; the rest are
+    random. The boss level, Mingrawn Timbletot, is never picked.
     """
     display_name = "Starting Levels"
     range_start = 1
     range_end = 11
     default = 3
+
+
+class StartWithJump(DefaultOnToggle):
+    """
+    Start the game able to jump.
+    Slide, Kick, Spring and Block are always found in the multiworld. Turn this off to shuffle Jump in with them.
+    Every level needs Jump, so with this off you can't clear anything until someone sends it to you. That only works
+    in a multiworld: in a single-player game this option is turned back on.
+    """
+    display_name = "Start With Jump"
 
 
 class PerfectChecks(DefaultOnToggle):
@@ -69,6 +80,7 @@ class MinimumDifficulty(Choice):
 class BitTripRunnerOptions(PerGameCommonOptions):
     start_inventory_from_pool: StartInventoryPool
     starting_levels: StartingLevels
+    start_with_jump: StartWithJump
     perfect_checks: PerfectChecks
     bonus_checks: BonusChecks
     rainbow_fragments: RainbowFragments
@@ -79,7 +91,7 @@ class BitTripRunnerOptions(PerGameCommonOptions):
 option_groups = [
     OptionGroup("Goal", [RainbowFragments, RainbowFragmentsRequired]),
     OptionGroup("Locations", [PerfectChecks, BonusChecks]),
-    OptionGroup("Gameplay", [StartingLevels, MinimumDifficulty]),
+    OptionGroup("Gameplay", [StartingLevels, StartWithJump, MinimumDifficulty]),
 ]
 
 option_presets = {

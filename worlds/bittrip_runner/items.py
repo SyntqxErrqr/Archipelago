@@ -4,7 +4,17 @@ from typing import TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
 
-from .data import GAME_NAME, GOLD_BAR, ITEM_NAME_TO_ID, LEVELS, RAINBOW_FRAGMENT, UNLOCKABLE_LEVELS, level_item_name
+from .data import (
+    ABILITIES,
+    GAME_NAME,
+    GOLD_BAR,
+    ITEM_NAME_TO_ID,
+    JUMP,
+    LEVELS,
+    RAINBOW_FRAGMENT,
+    UNLOCKABLE_LEVELS,
+    level_item_name,
+)
 
 if TYPE_CHECKING:
     from .world import BitTripRunnerWorld
@@ -15,6 +25,7 @@ class BitTripRunnerItem(Item):
 
 
 ITEM_GROUPS: dict[str, set[str]] = {
+    "Abilities": set(ABILITIES),
     "Levels": {level_item_name(level) for level in UNLOCKABLE_LEVELS},
     "Bosses": {level_item_name(level) for level in UNLOCKABLE_LEVELS if level.is_boss},
     **{
@@ -38,11 +49,14 @@ def create_item(world: BitTripRunnerWorld, name: str) -> BitTripRunnerItem:
 
 def create_all_items(world: BitTripRunnerWorld) -> None:
     starting_names = {level_item_name(level) for level in world.starting_levels}
+    if world.options.start_with_jump:
+        starting_names.add(JUMP)
     for name in sorted(starting_names):
         world.push_precollected(world.create_item(name))
 
     itempool = [world.create_item(level_item_name(level)) for level in UNLOCKABLE_LEVELS
                 if level_item_name(level) not in starting_names]
+    itempool += [world.create_item(ability) for ability in world.abilities_in_pool()]
     itempool += [world.create_item(RAINBOW_FRAGMENT) for _ in range(world.rainbow_fragments_placed)]
 
     unfilled = len(world.multiworld.get_unfilled_locations(world.player))

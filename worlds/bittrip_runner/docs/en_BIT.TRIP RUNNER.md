@@ -9,7 +9,15 @@ a config file.
 
 Every level in the game is locked until its unlock item is found somewhere in the multiworld. Instead of opening the
 next level by clearing the one before it, you open levels by receiving them, in any order and across all three zones.
-You start with a few random levels from Impetus (zone 1) already open.
+You start with a few levels from Impetus (zone 1) already open: always 1-1 and 1-2, then one level that needs Slide
+and one that needs Kick, then random ones.
+
+CommanderVideo's moves are items too. In the vanilla game you learn Slide at 1-3, Kick at 1-5, Spring at 1-7 and Block
+at 3-1; here you can't use a move until you receive it, and pressing its button does nothing until then. You start with
+Jump unless you turn off **Start With Jump**, in which case Jump is somewhere in the multiworld as well.
+
+A level counts as beatable once you have its unlock and every move the vanilla game had taught by that level, so 1-1 and
+1-2 only need Jump, Tenacity levels need everything but Block, and Triumph levels need all five moves.
 
 The final boss, **3-12 The Source**, is not unlocked by an item of its own. It opens once you have collected enough
 **Rainbow Fragments**.
@@ -23,6 +31,7 @@ Collect the required number of Rainbow Fragments, then beat 3-12 The Source.
 ## Which items can be in another player's world?
 
 - One unlock for each level, from 1-1 First Contact to 3-11 Rusty Warren, including the bosses of Impetus and Tenacity.
+- Slide, Kick, Spring and Block (and Jump, with Start With Jump turned off).
 - Rainbow Fragments, which open the final boss.
 - Gold Bars, which are filler and do nothing in the game.
 
@@ -40,8 +49,8 @@ time from the game's options menu; levels are only shown as unlocked on difficul
 
 No. The client keeps the randomizer's progress inside the running game only, and the game's own save (your vanilla
 level progress) is never written by the client. Your high scores are still saved as usual. The PERFECT markers on the
-level select show your progress in the current seed while the client is hooked in, and go back to normal when you
-restart the game without the client.
+level select show your progress in the current seed while the client is hooked in; if you restart the game, the client
+puts them back from the server as soon as it hooks in again. Without the client, the game goes back to normal.
 
 ## What does another world's item look like in BIT.TRIP RUNNER?
 
