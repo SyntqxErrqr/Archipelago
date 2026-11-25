@@ -110,6 +110,30 @@ class TestOneStartingLevel(BitTripRunnerTestBase):
         self.assertEqual(self.world.starting_levels, [LEVELS[0]])
 
 
+class TestStartWithAllMoves(BitTripRunnerTestBase):
+    options = {"start_with_all_moves": True, "start_with_jump": False}
+
+    def test_every_move_precollected_and_none_shuffled(self) -> None:
+        precollected = [item.name for item in self.multiworld.precollected_items[self.player]]
+        for ability in ABILITIES:
+            self.assertIn(ability, precollected)
+            self.assertNotIn(ability, self.world_item_names())
+
+    def test_fragments_get_the_freed_slots(self) -> None:
+        self.assertEqual(self.world.rainbow_fragments_placed, self.world.options.rainbow_fragments.value)
+        self.assertTrue(self.world.fill_slot_data()["start_with_all_moves"])
+
+
+class TestStartWithAllMovesLogic(BitTripRunnerLogicTestBase):
+    options = {"start_with_all_moves": True}
+
+    def test_triumph_needs_only_its_unlock(self) -> None:
+        level = LEVELS[24]
+        self.assertFalse(self.can_reach_location(clear_location_name(level)))
+        self.collect_by_name(level_item_name(level))
+        self.assertTrue(self.can_reach_location(clear_location_name(level)))
+
+
 class TestSoloWithoutJump(BitTripRunnerTestBase):
     options = {"start_with_jump": False}
 

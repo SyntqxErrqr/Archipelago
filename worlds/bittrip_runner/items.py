@@ -9,7 +9,6 @@ from .data import (
     GAME_NAME,
     GOLD_BAR,
     ITEM_NAME_TO_ID,
-    JUMP,
     LEVELS,
     RAINBOW_FRAGMENT,
     UNLOCKABLE_LEVELS,
@@ -49,8 +48,7 @@ def create_item(world: BitTripRunnerWorld, name: str) -> BitTripRunnerItem:
 
 def create_all_items(world: BitTripRunnerWorld) -> None:
     starting_names = {level_item_name(level) for level in world.starting_levels}
-    if world.options.start_with_jump:
-        starting_names.add(JUMP)
+    starting_names.update(world.starting_moves())
     for name in sorted(starting_names):
         world.push_precollected(world.create_item(name))
 

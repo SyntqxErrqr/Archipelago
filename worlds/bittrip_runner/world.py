@@ -68,11 +68,12 @@ class BitTripRunnerWorld(World):
             self.rainbow_fragments_placed = passthrough["rainbow_fragments_placed"]
             self.rainbow_fragments_required = passthrough["rainbow_fragments_required"]
             self.options.start_with_jump.value = int(passthrough.get("start_with_jump", True))
+            self.options.start_with_all_moves.value = int(passthrough.get("start_with_all_moves", False))
             self.options.perfect_checks.value = int(passthrough["perfect_checks"])
             self.options.bonus_checks.value = int(passthrough["bonus_checks"])
             return
 
-        if not self.options.start_with_jump:
+        if not self.options.start_with_jump and not self.options.start_with_all_moves:
             if self.multiworld.players == 1:
                 # Every level needs Jump, so a solo game would have nowhere to put it.
                 logging.warning(f"{self.player_name}: Start With Jump can only be turned off in a multiworld. "
@@ -118,8 +119,16 @@ class BitTripRunnerWorld(World):
             count += overflow
         return sorted(order[:count])
 
+    def starting_moves(self) -> list[str]:
+        if self.options.start_with_all_moves:
+            return list(ABILITIES)
+        if self.options.start_with_jump:
+            return [JUMP]
+        return []
+
     def abilities_in_pool(self) -> list[str]:
-        return [ability for ability in ABILITIES if not (ability == JUMP and self.options.start_with_jump)]
+        starting = self.starting_moves()
+        return [ability for ability in ABILITIES if ability not in starting]
 
     def level_items_in_pool(self) -> int:
         return len(UNLOCKABLE_LEVELS) - len(self.starting_levels)
@@ -229,6 +238,7 @@ class BitTripRunnerWorld(World):
             "bonus_checks": bool(self.options.bonus_checks),
             "minimum_difficulty": self.options.minimum_difficulty.value,
             "start_with_jump": bool(self.options.start_with_jump),
+            "start_with_all_moves": bool(self.options.start_with_all_moves),
         }
 
     @staticmethod
@@ -238,8 +248,9 @@ class BitTripRunnerWorld(World):
 
     def write_spoiler_header(self, spoiler_handle: TextIO) -> None:
         player_name = self.multiworld.get_player_name(self.player)
-        if self.options.start_with_jump:
-            spoiler_handle.write(f"\n{player_name} starts with Jump")
+        moves = self.starting_moves()
+        if moves:
+            spoiler_handle.write(f"\n{player_name}'s starting moves: {', '.join(moves)}")
         spoiler_handle.write(f"\n{player_name}'s starting levels: "
                              f"{', '.join(level.full_name for level in self.starting_levels)}\n")
         spoiler_handle.write(f"{player_name}'s Rainbow Fragments needed for {FINAL_LEVEL.full_name}: "

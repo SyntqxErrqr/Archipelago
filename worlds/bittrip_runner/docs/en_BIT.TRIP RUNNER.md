@@ -14,7 +14,8 @@ and one that needs Kick, then random ones.
 
 CommanderVideo's moves are items too. In the vanilla game you learn Slide at 1-3, Kick at 1-5, Spring at 1-7 and Block
 at 3-1; here you can't use a move until you receive it, and pressing its button does nothing until then. You start with
-Jump unless you turn off **Start With Jump**, in which case Jump is somewhere in the multiworld as well.
+Jump unless you turn off **Start With Jump**, in which case Jump is somewhere in the multiworld as well. Turn on
+**Start With All Moves** to skip move shuffling entirely and start with all five.
 
 A level counts as beatable once you have its unlock and every move the vanilla game had taught by that level, so 1-1 and
 1-2 only need Jump, Tenacity levels need everything but Block, and Triumph levels need all five moves.
@@ -31,7 +32,7 @@ Collect the required number of Rainbow Fragments, then beat 3-12 The Source.
 ## Which items can be in another player's world?
 
 - One unlock for each level, from 1-1 First Contact to 3-11 Rusty Warren, including the bosses of Impetus and Tenacity.
-- Slide, Kick, Spring and Block (and Jump, with Start With Jump turned off).
+- Slide, Kick, Spring and Block (and Jump, with Start With Jump turned off), unless Start With All Moves is on.
 - Rainbow Fragments, which open the final boss.
 - Gold Bars, which are filler and do nothing in the game.
 

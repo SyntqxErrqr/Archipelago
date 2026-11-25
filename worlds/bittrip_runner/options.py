@@ -25,6 +25,15 @@ class StartWithJump(DefaultOnToggle):
     display_name = "Start With Jump"
 
 
+class StartWithAllMoves(Toggle):
+    """
+    Start the game with every move: Jump, Slide, Kick, Spring and Block.
+    No moves are shuffled into the multiworld, so only levels and Rainbow Fragments are found.
+    Overrides Start With Jump.
+    """
+    display_name = "Start With All Moves"
+
+
 class PerfectChecks(DefaultOnToggle):
     """
     Collecting every gold bar in a level (a "PERFECT") is a check.
@@ -81,6 +90,7 @@ class BitTripRunnerOptions(PerGameCommonOptions):
     start_inventory_from_pool: StartInventoryPool
     starting_levels: StartingLevels
     start_with_jump: StartWithJump
+    start_with_all_moves: StartWithAllMoves
     perfect_checks: PerfectChecks
     bonus_checks: BonusChecks
     rainbow_fragments: RainbowFragments
@@ -91,7 +101,7 @@ class BitTripRunnerOptions(PerGameCommonOptions):
 option_groups = [
     OptionGroup("Goal", [RainbowFragments, RainbowFragmentsRequired]),
     OptionGroup("Locations", [PerfectChecks, BonusChecks]),
-    OptionGroup("Gameplay", [StartingLevels, StartWithJump, MinimumDifficulty]),
+    OptionGroup("Gameplay", [StartingLevels, StartWithJump, StartWithAllMoves, MinimumDifficulty]),
 ]
 
 option_presets = {
