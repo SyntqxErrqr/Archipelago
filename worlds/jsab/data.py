@@ -2,8 +2,7 @@
 Static game data for Just Shapes & Beats.
 
 Song ids, names and chapter layout come from the game itself (Steam build v1.6.50), dumped by the JSABDataDump tool in
-jsab_mod/tools at the repository root. This module must not import anything from Archipelago core, so tests and tools
-can use it freely.
+the mod repository. This module must not import anything from Archipelago core, so tests and tools can use it freely.
 """
 from __future__ import annotations
 
