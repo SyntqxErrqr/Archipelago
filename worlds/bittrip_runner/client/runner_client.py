@@ -35,6 +35,38 @@ DIFFICULTY_NAMES = ("Easy", "Normal", "Hard")
 POLL_SECONDS = 0.25
 
 
+def window_icon_path() -> str | None:
+    """
+    A file path for the client window's icon.
+
+    Kivy hands the window icon to SDL as a file path, which can't point inside a zipped .apworld, so the icon is
+    copied out of the package into Archipelago's cache folder first. Returns None if that fails; the default
+    Archipelago icon is used then.
+    """
+    import os
+    import pkgutil
+
+    from Utils import cache_path
+
+    from ..components import ICON_RESOURCE
+
+    try:
+        data = pkgutil.get_data(__package__.rsplit(".", 1)[0], ICON_RESOURCE)
+        if not data:
+            return None
+        path = cache_path("bittrip_runner", "icon.png")
+        if os.path.exists(path):
+            with open(path, "rb") as icon_file:
+                if icon_file.read() == data:
+                    return path
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as icon_file:
+            icon_file.write(data)
+        return path
+    except OSError:
+        return None
+
+
 class BitTripRunnerCommandProcessor(ClientCommandProcessor):
     ctx: BitTripRunnerContext
 
@@ -114,9 +146,18 @@ class BitTripRunnerContext(CommonContext):
         await super().disconnect(allow_autoreconnect)
 
     def make_gui(self) -> type[kvui.GameManager]:
-        ui = super().make_gui()
-        ui.base_title = "Archipelago BIT.TRIP RUNNER Client"
-        return ui
+        base = super().make_gui()
+
+        class BitTripRunnerManager(base):  # type: ignore[valid-type, misc]
+            base_title = "Archipelago BIT.TRIP RUNNER Client"
+
+            def __init__(self, ctx: BitTripRunnerContext) -> None:
+                super().__init__(ctx)
+                icon = window_icon_path()
+                if icon:
+                    self.icon = icon
+
+        return BitTripRunnerManager
 
     # ---- state ------------------------------------------------------------------------------------------------------
 
