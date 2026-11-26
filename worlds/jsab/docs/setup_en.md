@@ -5,8 +5,9 @@
 - [Just Shapes & Beats](https://store.steampowered.com/app/531510/) on Steam, on Windows.
 - [BepInEx 6](https://builds.bepinex.dev/projects/bepinex_be) (bleeding edge build, the `BepInEx-Unity.IL2CPP-win-x64`
   download). BepInEx 5 does not work with this game.
-- The JSAB Archipelago mod, from the
-  [JSAB-Archipelago releases page](https://github.com/SyntqxErrqr/JSAB-Archipelago/releases).
+- The JSAB Archipelago mod. Its source is in the `jsab_mod` folder of the
+  [SyntqxErrqr/Archipelago](https://github.com/SyntqxErrqr/Archipelago/tree/just-shapes-and-beats/jsab_mod) repository;
+  build it with `build-release.ps1` there, or use a release zip of it.
 - The latest release of [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases), to generate games.
 - The `jsab.apworld` file, placed in your Archipelago `custom_worlds` folder (skip this if your Archipelago install
   already includes Just Shapes & Beats).
