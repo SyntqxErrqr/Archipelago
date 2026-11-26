@@ -141,6 +141,20 @@ PLAYLIST_SONGS = tuple(song for song in SONGS if song.in_playlist)
 FINALE = SONG_BY_GAME_ID["towerBoss_3"]
 """Till It's Over, the end of the main story."""
 LOST_CHAPTER_BOSS = SONG_BY_GAME_ID["lost_chapter_boss"]
+TUTORIAL_SONG = SONG_BY_GAME_ID["tuto_0"]
+"""Corrupted, the tutorial level. The game always plays it on Normal, so the minimum difficulty doesn't apply to it."""
+
+TUTORIAL_CHECKPOINTS = 9
+"""
+Triangles collected in the tutorial before its last one, which ends the level. The game plays the tutorial as nine
+scenes (LogicMusicTutorial.startLoops); collecting the Nth triangle starts scene N-1
+(ActorTutorialLevelLogic.playScene).
+"""
+TUTORIAL_CHECKPOINTS_WITHOUT_DASH = 6
+"""
+The sixth triangle starts scene 5, a wall of spikes you can only get past by dashing
+(LogicTriangleToCollectTutorial.isStuckedScene), so checkpoints after the sixth need Dash.
+"""
 
 
 def chapter_songs(chapter: Chapter) -> tuple[Song, ...]:
@@ -163,6 +177,7 @@ PROGRESSIVE_CHAPTER = "Progressive Chapter"
 LOST_CHAPTER_KEY = "Lost Chapter Key"
 BEAT_SHARD = "Beat Shard"
 BEAT_POINTS = "Beat Points"
+DASH = "Dash"
 VICTORY = "Victory"
 
 BEAT_POINTS_PER_ITEM = 100
@@ -172,6 +187,7 @@ ITEM_ID_PROGRESSIVE_CHAPTER = 1
 ITEM_ID_LOST_CHAPTER_KEY = 2
 ITEM_ID_BEAT_SHARD = 3
 ITEM_ID_BEAT_POINTS = 4
+ITEM_ID_DASH = 5
 ITEM_ID_SONG_BASE = 100
 
 ITEM_NAME_TO_ID: dict[str, int] = {
@@ -179,6 +195,7 @@ ITEM_NAME_TO_ID: dict[str, int] = {
     LOST_CHAPTER_KEY: ITEM_ID_LOST_CHAPTER_KEY,
     BEAT_SHARD: ITEM_ID_BEAT_SHARD,
     BEAT_POINTS: ITEM_ID_BEAT_POINTS,
+    DASH: ITEM_ID_DASH,
     **{song.name: ITEM_ID_SONG_BASE + song.number for song in PLAYLIST_SONGS},
 }
 
@@ -186,6 +203,15 @@ ITEM_NAME_TO_ID: dict[str, int] = {
 
 LOCATION_ID_CLEAR_BASE = 1000
 LOCATION_ID_S_RANK_BASE = 2000
+LOCATION_ID_TUTORIAL_CHECKPOINT_BASE = 3000
+
+
+def tutorial_checkpoint_name(number: int) -> str:
+    """Number is 1-based."""
+    return f"{TUTORIAL_SONG.name} - Checkpoint {number}"
+
+
+TUTORIAL_CHECKPOINT_NAMES = tuple(tutorial_checkpoint_name(n) for n in range(1, TUTORIAL_CHECKPOINTS + 1))
 
 
 def clear_location_name(song: Song) -> str:
@@ -209,6 +235,7 @@ LOCATION_NAME_TO_ID: dict[str, int] = {
     **{clear_location_name(song): clear_location_id(song) for song in SONGS if song is not FINALE},
     # Ranks only exist in Playlist mode.
     **{s_rank_location_name(song): s_rank_location_id(song) for song in PLAYLIST_SONGS},
+    **{name: LOCATION_ID_TUTORIAL_CHECKPOINT_BASE + n for n, name in enumerate(TUTORIAL_CHECKPOINT_NAMES, start=1)},
 }
 
 # ---- difficulties ----------------------------------------------------------------------------------------------------

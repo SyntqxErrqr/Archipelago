@@ -9,6 +9,7 @@ from .data import (
     PLAYLIST_SONGS,
     SONG_GROUPS,
     SONGS,
+    TUTORIAL_CHECKPOINT_NAMES,
     chapter_songs,
     clear_location_name,
     s_rank_location_name,
@@ -20,6 +21,7 @@ class JSABLocation(Location):
 
 
 LOCATION_GROUPS: dict[str, set[str]] = {
+    "Tutorial Checkpoints": set(TUTORIAL_CHECKPOINT_NAMES),
     "Clears": {clear_location_name(song) for song in SONGS if song is not FINALE},
     "S Ranks": {s_rank_location_name(song) for song in PLAYLIST_SONGS},
     **{

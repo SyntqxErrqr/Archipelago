@@ -7,6 +7,7 @@ from BaseClasses import Item, ItemClassification
 from .data import (
     BEAT_POINTS,
     BEAT_SHARD,
+    DASH,
     GAME_NAME,
     ITEM_NAME_TO_ID,
     LOST_CHAPTER_KEY,
@@ -27,6 +28,7 @@ ITEM_GROUPS: dict[str, set[str]] = {
     "Songs": {name for group in SONG_GROUPS.values() for name in group},
     **{name: set(group) for name, group in SONG_GROUPS.items()},
     "Chapters": {PROGRESSIVE_CHAPTER, LOST_CHAPTER_KEY},
+    "Abilities": {DASH},
 }
 
 
@@ -43,6 +45,12 @@ def create_item(world: JSABWorld, name: str) -> JSABItem:
 
 
 def create_all_items(world: JSABWorld) -> None:
+    dash = world.create_item(DASH)
+    if world.options.start_with_dash:
+        world.push_precollected(dash)
+    else:
+        world.multiworld.itempool.append(dash)
+
     if world.is_story:
         itempool = [world.create_item(PROGRESSIVE_CHAPTER) for _ in MAIN_CHAPTERS[1:]]
         if world.options.lost_chapter:
@@ -54,5 +62,6 @@ def create_all_items(world: JSABWorld) -> None:
         itempool += [world.create_item(BEAT_SHARD) for _ in range(world.beat_shards_placed)]
 
     unfilled = len(world.multiworld.get_unfilled_locations(world.player))
-    itempool += [world.create_filler() for _ in range(unfilled - len(itempool))]
+    in_pool = len(itempool) + (0 if world.options.start_with_dash else 1)
+    itempool += [world.create_filler() for _ in range(unfilled - in_pool)]
     world.multiworld.itempool += itempool

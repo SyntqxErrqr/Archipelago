@@ -25,10 +25,16 @@ When you reach a level in a chapter you haven't opened yet, the game won't let y
 back to the chapter select and replay earlier chapters while you wait. Because chapters always open in order, you never
 hold a chapter you can't reach.
 
-The **Lost Chapter** ("Anachronic Order") is opened by its own item, the **Lost Chapter Key**, unless the Lost Chapter
-option leaves it out.
+The **Lost Chapter** ("Anachronic Order") is left out by default. With the Lost Chapter option on Include or Require, it
+is opened by its own item, the **Lost Chapter Key**.
 
 Songs you clear in Story mode open in Playlist mode as they normally do, which is where S Rank checks are earned.
+
+### Dash
+
+You start able to dash. Turn off **Start With Dash** to shuffle **Dash** into the multiworld instead: you can't dash
+until someone sends it. Only the first six tutorial checkpoints can be reached without it, so in a single-player game
+this only works in Story mode with Tutorial Checkpoints on; otherwise the option is turned back on.
 
 ### Playlist mode
 
@@ -43,19 +49,22 @@ You start with a few songs on the Playlist screen and every other song is an ite
 
 ## Which items can be in another player's world?
 
-- Story mode: five Progressive Chapters and the Lost Chapter Key.
+- Story mode: five Progressive Chapters, and the Lost Chapter Key when the Lost Chapter is included.
+- Dash, when Start With Dash is off.
 - Playlist mode: one item per song (other than your starting songs and the goal song), and the Beat Shards.
 - Beat Points, the game's own currency, as filler. Each one gives you 100 Beat Points.
 
 ## What counts as a location check?
 
+- Story mode: each of the 9 triangles you collect in the tutorial level, Corrupted (Tutorial Checkpoints, on by
+  default). The tenth triangle ends the level and counts as its clear.
 - Clearing a song. In Story mode that means clearing the level in Story mode; in Playlist mode it means clearing the
   song on the Playlist screen.
 - Getting an S Rank on a song in Playlist mode, which means finishing it without taking any damage (on by default).
   In Story mode, this works for every story song you have cleared, since those open in Playlist mode.
 
-Clears and S Ranks only count on your **Minimum Difficulty** or a harder one. The Playlist's Party Mode difficulty
-records no ranks, so it never counts.
+Clears and S Ranks only count on your **Minimum Difficulty** or a harder one. The tutorial is always played on
+Normal, so its checks always count. The Playlist's Party Mode difficulty records no ranks, so it never counts.
 
 ## Does this touch my save file?
 

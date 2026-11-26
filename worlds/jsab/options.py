@@ -57,7 +57,25 @@ class LostChapter(Choice):
     option_exclude = 0
     option_include = 1
     option_require = 2
-    default = option_include
+    default = option_exclude
+
+
+class TutorialCheckpoints(DefaultOnToggle):
+    """
+    Story mode only. Each of the 9 triangles you collect in the tutorial level, Corrupted, is a check.
+    The first six can be reached without dashing; the seventh is behind a wall you have to dash through.
+    """
+    display_name = "Tutorial Checkpoints"
+
+
+class StartWithDash(DefaultOnToggle):
+    """
+    Start the game able to dash. Turn this off to shuffle Dash into the multiworld: you can't dash until someone sends
+    it to you.
+    Every level except the start of the tutorial needs Dash, so turning this off only works in a multiworld, or in
+    Story mode with Tutorial Checkpoints on. Otherwise this option is turned back on.
+    """
+    display_name = "Start With Dash"
 
 
 class StartingSongs(Range):
@@ -116,7 +134,9 @@ class JSABOptions(PerGameCommonOptions):
     mode: Mode
     s_rank_checks: SRankChecks
     minimum_difficulty: MinimumDifficulty
+    start_with_dash: StartWithDash
     lost_chapter: LostChapter
+    tutorial_checkpoints: TutorialCheckpoints
     starting_songs: StartingSongs
     beat_shards: BeatShards
     beat_shards_required: BeatShardsRequired
@@ -125,8 +145,8 @@ class JSABOptions(PerGameCommonOptions):
 
 
 option_groups = [
-    OptionGroup("General", [Mode, SRankChecks, MinimumDifficulty]),
-    OptionGroup("Story Mode", [LostChapter]),
+    OptionGroup("General", [Mode, SRankChecks, MinimumDifficulty, StartWithDash]),
+    OptionGroup("Story Mode", [LostChapter, TutorialCheckpoints]),
     OptionGroup("Playlist Mode", [StartingSongs, BeatShards, BeatShardsRequired, GoalSong, ExcludeSongs]),
 ]
 
@@ -134,6 +154,11 @@ option_presets = {
     "story": {
         "mode": Mode.option_story,
         "lost_chapter": LostChapter.option_include,
+    },
+    "story, dash shuffled": {
+        "mode": Mode.option_story,
+        "start_with_dash": False,
+        "tutorial_checkpoints": True,
     },
     "playlist sprint": {
         "mode": Mode.option_playlist,

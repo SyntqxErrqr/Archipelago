@@ -15,17 +15,20 @@ from .data import (
     BEAT_POINTS_PER_ITEM,
     BEAT_SHARD,
     CHAPTERS,
+    DASH,
     DIFFICULTY_NAMES,
     FINALE,
     GAME_NAME,
     ITEM_ID_BEAT_POINTS,
     ITEM_ID_BEAT_SHARD,
+    ITEM_ID_DASH,
     ITEM_ID_LOST_CHAPTER_KEY,
     ITEM_ID_PROGRESSIVE_CHAPTER,
     ITEM_ID_SONG_BASE,
     ITEM_NAME_TO_ID,
     LOCATION_ID_CLEAR_BASE,
     LOCATION_ID_S_RANK_BASE,
+    LOCATION_ID_TUTORIAL_CHECKPOINT_BASE,
     LOCATION_NAME_TO_ID,
     LOST_CHAPTER,
     LOST_CHAPTER_KEY,
@@ -35,6 +38,9 @@ from .data import (
     SONG_BY_GAME_ID,
     SONG_GROUPS,
     SONGS,
+    TUTORIAL_CHECKPOINT_NAMES,
+    TUTORIAL_CHECKPOINTS_WITHOUT_DASH,
+    TUTORIAL_SONG,
     VICTORY,
     Song,
     chapter_songs,
@@ -98,9 +104,25 @@ class JSABWorld(World):
             self.apply_passthrough(passthrough)
             return
 
-        if self.is_story:
-            return
-        self.pick_playlist()
+        if not self.options.start_with_dash and not self.has_locations_without_dash():
+            if self.multiworld.players == 1:
+                # Nothing can be checked without Dash, so a single-player game has nowhere to put it.
+                logging.warning(f"{self.player_name}: Start With Dash can only be turned off in a multiworld or in "
+                                f"Story mode with Tutorial Checkpoints on. Turning it back on.")
+                self.options.start_with_dash.value = 1
+            else:
+                self.multiworld.early_items[self.player][DASH] = 1
+
+        if not self.is_story:
+            self.pick_playlist()
+
+    def has_locations_without_dash(self) -> bool:
+        """Only the start of the tutorial can be checked without dashing."""
+        return self.is_story and bool(self.options.tutorial_checkpoints)
+
+    def dash_free_location_names(self) -> set[str]:
+        return set(TUTORIAL_CHECKPOINT_NAMES[:TUTORIAL_CHECKPOINTS_WITHOUT_DASH]) if self.has_locations_without_dash() \
+            else set()
 
     def apply_passthrough(self, slot_data: Mapping[str, Any]) -> None:
         """Universal Tracker regenerates the world from slot data; reuse what the real generation picked."""
@@ -108,6 +130,8 @@ class JSABWorld(World):
         self.options.s_rank_checks.value = int(slot_data["s_rank_checks"])
         self.options.minimum_difficulty.value = slot_data["minimum_difficulty"]
         self.options.lost_chapter.value = slot_data["lost_chapter"]
+        self.options.start_with_dash.value = int(slot_data.get("start_with_dash", True))
+        self.options.tutorial_checkpoints.value = int(slot_data.get("tutorial_checkpoints", 0) > 0)
         if self.is_story:
             return
         self.song_pool = [SONG_BY_GAME_ID[game_id] for game_id in slot_data["song_pool"]]
@@ -133,11 +157,18 @@ class JSABWorld(World):
 
         others = [song for song in self.song_pool if song is not self.goal_song]
         self.random.shuffle(others)
-        self.starting_songs = sorted(others[:self.options.starting_songs.value])
+        count = self.options.starting_songs.value
+        # Every song you don't start with is an item, as is Dash when it's shuffled, and at least one Beat Shard has
+        # to fit as well. With S Rank Checks off there is one location per song, so start with more songs if needed.
+        extra_items = 1 + (0 if self.options.start_with_dash else 1)
+        while count < len(others) and len(others) - count + extra_items > self.location_count():
+            count += 1
+        if count > self.options.starting_songs.value:
+            logging.info(f"{self.player_name}: not enough locations for every song, "
+                         f"starting with {count} songs instead of {self.options.starting_songs.value}.")
+        self.starting_songs = sorted(others[:count])
 
-        # Every song you don't start with is an item, and at least one Beat Shard has to fit as well. Starting with
-        # at least one song always leaves that room, even with S Rank Checks off.
-        free_slots = self.location_count() - len(self.song_items())
+        free_slots = self.location_count() - len(self.song_items()) - (extra_items - 1)
         self.beat_shards_placed = max(1, min(self.options.beat_shards.value, free_slots))
         self.beat_shards_required = max(
             1, math.ceil(self.beat_shards_placed * self.options.beat_shards_required.value / 100)
@@ -162,8 +193,12 @@ class JSABWorld(World):
             names.append(s_rank_location_name(song))
         return names
 
+    def tutorial_checkpoint_names(self) -> tuple[str, ...]:
+        return TUTORIAL_CHECKPOINT_NAMES if self.is_story and self.options.tutorial_checkpoints else ()
+
     def location_count(self) -> int:
-        return sum(len(self.location_names_for(song)) for song in self.checked_songs())
+        return (sum(len(self.location_names_for(song)) for song in self.checked_songs())
+                + len(self.tutorial_checkpoint_names()))
 
     def create_regions(self) -> None:
         menu = Region(self.origin_region_name, self.player, self.multiworld)
@@ -188,6 +223,9 @@ class JSABWorld(World):
             else:
                 # Chapters open strictly in story order, so chapter N needs N Progressive Chapters.
                 self.create_entrance(menu, region, Has(PROGRESSIVE_CHAPTER, count=chapter.index))
+            if chapter.index == TUTORIAL_SONG.chapter:
+                region.add_locations({name: LOCATION_NAME_TO_ID[name] for name in self.tutorial_checkpoint_names()},
+                                     locations.JSABLocation)
             for song in chapter_songs(chapter):
                 self.add_song_locations(region, song)
             if FINALE.chapter == chapter.index:
@@ -218,6 +256,13 @@ class JSABWorld(World):
         return BEAT_POINTS
 
     def set_rules(self) -> None:
+        # Dash is needed everywhere except the start of the tutorial. When you start with it, it is precollected, so
+        # these rules always pass.
+        dash_free = self.dash_free_location_names()
+        for location in self.multiworld.get_locations(self.player):
+            if location.name not in dash_free:
+                self.set_rule(location, Has(DASH))
+
         if not self.is_story:
             self.set_completion_rule(Has(VICTORY))
         elif self.options.lost_chapter == LostChapter.option_require:
@@ -249,9 +294,15 @@ class JSABWorld(World):
                 "lost_chapter_key": ITEM_ID_LOST_CHAPTER_KEY,
                 "beat_shard": ITEM_ID_BEAT_SHARD,
                 "beat_points": ITEM_ID_BEAT_POINTS,
+                "dash": ITEM_ID_DASH,
                 "song_base": ITEM_ID_SONG_BASE,
             },
             "beat_points_per_item": BEAT_POINTS_PER_ITEM,
+            "start_with_dash": bool(self.options.start_with_dash),
+            "tutorial_checkpoints": len(self.tutorial_checkpoint_names()),
+            "tutorial_checkpoint_location_base": LOCATION_ID_TUTORIAL_CHECKPOINT_BASE,
+            "tutorial_song": TUTORIAL_SONG.game_id,
+            "difficulty_exempt": [TUTORIAL_SONG.game_id],
         }
 
     @staticmethod
@@ -262,7 +313,8 @@ class JSABWorld(World):
     def write_spoiler_header(self, spoiler_handle: TextIO) -> None:
         player_name = self.multiworld.get_player_name(self.player)
         spoiler_handle.write(f"\n{player_name}'s mode: {'Story' if self.is_story else 'Playlist'}, "
-                             f"minimum difficulty {DIFFICULTY_NAMES[self.options.minimum_difficulty.value - 1]}\n")
+                             f"minimum difficulty {DIFFICULTY_NAMES[self.options.minimum_difficulty.value - 1]}, "
+                             f"{'starts with Dash' if self.options.start_with_dash else 'Dash shuffled'}\n")
         if self.is_story:
             return
         assert self.goal_song is not None
