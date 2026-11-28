@@ -51,7 +51,7 @@ CHAPTERS: tuple[Chapter, ...] = (
     )),
 )
 MAIN_CHAPTERS = CHAPTERS[:6]
-"""The main story, which Progressive Chapter items open one at a time."""
+"""The main story, played in this order."""
 LOST_CHAPTER = CHAPTERS[6]
 
 
@@ -161,6 +161,21 @@ def chapter_songs(chapter: Chapter) -> tuple[Song, ...]:
     return tuple(song for song in SONGS if song.chapter == chapter.index)
 
 
+# ---- story level spots ------------------------------------------------------------------------------------------------
+# A level spot is a node on the story map that starts a level. Spots are named after the song the game normally plays
+# there; with Shuffle Story Songs a spot can play a different song.
+
+MAIN_STORY_SPOTS: tuple[Song, ...] = tuple(song for chapter in MAIN_CHAPTERS for song in chapter_songs(chapter))
+"""The main story's 26 level spots in map order, from the tutorial (open from the start) to Till It's Over."""
+LOST_CHAPTER_SPOTS: tuple[Song, ...] = chapter_songs(LOST_CHAPTER)
+"""The Lost Chapter's 5 level spots in map order."""
+FIXED_SPOTS = frozenset({TUTORIAL_SONG, FINALE})
+"""
+Spots Shuffle Story Songs leaves alone. The tutorial is built around teaching the controls (and holds the tutorial
+checkpoints), and Till It's Over ends the story.
+"""
+
+
 SONG_GROUPS: dict[str, frozenset[str]] = {
     "Story Songs": frozenset(
         song.name for song in PLAYLIST_SONGS if song.in_story and song.chapter != LOST_CHAPTER.index
@@ -173,8 +188,10 @@ SONG_GROUPS: dict[str, frozenset[str]] = {
 
 # ---- items -----------------------------------------------------------------------------------------------------------
 
-PROGRESSIVE_CHAPTER = "Progressive Chapter"
-LOST_CHAPTER_KEY = "Lost Chapter Key"
+PROGRESSIVE_LEVEL = "Progressive Level"
+"""Story mode: each one opens the next main story level spot."""
+PROGRESSIVE_LOST_LEVEL = "Progressive Lost Chapter Level"
+"""Story mode: each one opens the next Lost Chapter level spot; the first opens the chapter."""
 BEAT_SHARD = "Beat Shard"
 BEAT_POINTS = "Beat Points"
 DASH = "Dash"
@@ -183,16 +200,17 @@ VICTORY = "Victory"
 BEAT_POINTS_PER_ITEM = 100
 """How many Beat Points (the game's own currency) one Beat Points filler item gives."""
 
-ITEM_ID_PROGRESSIVE_CHAPTER = 1
-ITEM_ID_LOST_CHAPTER_KEY = 2
+# Ids 1 and 2 were Progressive Chapter and Lost Chapter Key in world version 0.1.0. Never reuse them.
 ITEM_ID_BEAT_SHARD = 3
 ITEM_ID_BEAT_POINTS = 4
 ITEM_ID_DASH = 5
+ITEM_ID_PROGRESSIVE_LEVEL = 6
+ITEM_ID_PROGRESSIVE_LOST_LEVEL = 7
 ITEM_ID_SONG_BASE = 100
 
 ITEM_NAME_TO_ID: dict[str, int] = {
-    PROGRESSIVE_CHAPTER: ITEM_ID_PROGRESSIVE_CHAPTER,
-    LOST_CHAPTER_KEY: ITEM_ID_LOST_CHAPTER_KEY,
+    PROGRESSIVE_LEVEL: ITEM_ID_PROGRESSIVE_LEVEL,
+    PROGRESSIVE_LOST_LEVEL: ITEM_ID_PROGRESSIVE_LOST_LEVEL,
     BEAT_SHARD: ITEM_ID_BEAT_SHARD,
     BEAT_POINTS: ITEM_ID_BEAT_POINTS,
     DASH: ITEM_ID_DASH,

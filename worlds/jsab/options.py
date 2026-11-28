@@ -1,6 +1,15 @@
 from dataclasses import dataclass
 
-from Options import Choice, DefaultOnToggle, OptionGroup, OptionSet, PerGameCommonOptions, Range, StartInventoryPool
+from Options import (
+    Choice,
+    DefaultOnToggle,
+    OptionGroup,
+    OptionSet,
+    PerGameCommonOptions,
+    Range,
+    StartInventoryPool,
+    Toggle,
+)
 
 from .data import PLAYLIST_SONGS, SONG_GROUPS
 
@@ -11,9 +20,9 @@ class Mode(Choice):
     """
     Which part of the game the randomizer runs in.
 
-    Story: play through Story mode. Chapters open in their usual order, one Progressive Chapter item at a time, and
-    clearing story levels sends checks. Songs you reach in the story also open in Playlist mode for S Rank checks.
-    Beat Till It's Over to win.
+    Story: play through Story mode. Every level on the story map is locked until a Progressive Level item opens it,
+    one level at a time in story order, and clearing story levels sends checks. Songs you clear in the story also open
+    in Playlist mode for S Rank checks. Beat Till It's Over to win.
 
     Playlist: play songs from the Playlist screen. You start with a few songs and the rest are items. Collect
     Beat Shards to open the goal song, then clear it to win.
@@ -50,8 +59,8 @@ class LostChapter(Choice):
     Story mode only. What to do with the Lost Chapter ("Anachronic Order").
 
     Exclude: leave it out.
-    Include: its levels are checks, opened by a Lost Chapter Key item.
-    Require: as Include, and you also have to beat its boss, Spider Dance, to win.
+    Include: its levels are checks, opened one at a time by Progressive Lost Chapter Level items.
+    Require: as Include, and you also have to clear its last level to win.
     """
     display_name = "Lost Chapter"
     option_exclude = 0
@@ -66,6 +75,16 @@ class TutorialCheckpoints(DefaultOnToggle):
     The first six can be reached without dashing; the seventh is behind a wall you have to dash through.
     """
     display_name = "Tutorial Checkpoints"
+
+
+class ShuffleStorySongs(Toggle):
+    """
+    Story mode only. Each level on the story map plays a random story song instead of its own, so the story's songs come
+    in a new order. The tutorial (Corrupted) and the finale (Till It's Over) stay where they are. With the Lost Chapter
+    included, its songs are shuffled in with the rest.
+    The levels still open in map order; only the song each one plays changes.
+    """
+    display_name = "Shuffle Story Songs"
 
 
 class StartWithDash(DefaultOnToggle):
@@ -137,6 +156,7 @@ class JSABOptions(PerGameCommonOptions):
     start_with_dash: StartWithDash
     lost_chapter: LostChapter
     tutorial_checkpoints: TutorialCheckpoints
+    shuffle_story_songs: ShuffleStorySongs
     starting_songs: StartingSongs
     beat_shards: BeatShards
     beat_shards_required: BeatShardsRequired
@@ -146,7 +166,7 @@ class JSABOptions(PerGameCommonOptions):
 
 option_groups = [
     OptionGroup("General", [Mode, SRankChecks, MinimumDifficulty, StartWithDash]),
-    OptionGroup("Story Mode", [LostChapter, TutorialCheckpoints]),
+    OptionGroup("Story Mode", [LostChapter, TutorialCheckpoints, ShuffleStorySongs]),
     OptionGroup("Playlist Mode", [StartingSongs, BeatShards, BeatShardsRequired, GoalSong, ExcludeSongs]),
 ]
 
@@ -159,6 +179,11 @@ option_presets = {
         "mode": Mode.option_story,
         "start_with_dash": False,
         "tutorial_checkpoints": True,
+    },
+    "story, songs shuffled": {
+        "mode": Mode.option_story,
+        "lost_chapter": LostChapter.option_include,
+        "shuffle_story_songs": True,
     },
     "playlist sprint": {
         "mode": Mode.option_playlist,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from BaseClasses import Item, ItemClassification
@@ -10,9 +11,10 @@ from .data import (
     DASH,
     GAME_NAME,
     ITEM_NAME_TO_ID,
-    LOST_CHAPTER_KEY,
-    MAIN_CHAPTERS,
-    PROGRESSIVE_CHAPTER,
+    LOST_CHAPTER_SPOTS,
+    MAIN_STORY_SPOTS,
+    PROGRESSIVE_LEVEL,
+    PROGRESSIVE_LOST_LEVEL,
     SONG_GROUPS,
 )
 
@@ -27,7 +29,7 @@ class JSABItem(Item):
 ITEM_GROUPS: dict[str, set[str]] = {
     "Songs": {name for group in SONG_GROUPS.values() for name in group},
     **{name: set(group) for name, group in SONG_GROUPS.items()},
-    "Chapters": {PROGRESSIVE_CHAPTER, LOST_CHAPTER_KEY},
+    "Story Levels": {PROGRESSIVE_LEVEL, PROGRESSIVE_LOST_LEVEL},
     "Abilities": {DASH},
 }
 
@@ -51,17 +53,26 @@ def create_all_items(world: JSABWorld) -> None:
     else:
         world.multiworld.itempool.append(dash)
 
+    unfilled = len(world.multiworld.get_unfilled_locations(world.player))
+    dash_in_pool = 0 if world.options.start_with_dash else 1
     if world.is_story:
-        itempool = [world.create_item(PROGRESSIVE_CHAPTER) for _ in MAIN_CHAPTERS[1:]]
+        # The first spot, the tutorial, is open from the start; every later one takes one more Progressive Level.
+        itempool = [world.create_item(PROGRESSIVE_LEVEL) for _ in MAIN_STORY_SPOTS[1:]]
         if world.options.lost_chapter:
-            itempool.append(world.create_item(LOST_CHAPTER_KEY))
+            itempool += [world.create_item(PROGRESSIVE_LOST_LEVEL) for _ in LOST_CHAPTER_SPOTS]
+        # With S Ranks and Tutorial Checkpoints off there is one location per level, which leaves no room for a
+        # shuffled Dash. Start with the first levels open instead.
+        overflow = len(itempool) + dash_in_pool - unfilled
+        if overflow > 0:
+            logging.info(f"{world.player_name}: not enough locations for every Progressive Level, "
+                         f"starting with {overflow} of them.")
+            for _ in range(overflow):
+                world.push_precollected(itempool.pop(0))
     else:
         for song in world.starting_songs:
             world.push_precollected(world.create_item(song.name))
         itempool = [world.create_item(song.name) for song in world.song_items()]
         itempool += [world.create_item(BEAT_SHARD) for _ in range(world.beat_shards_placed)]
 
-    unfilled = len(world.multiworld.get_unfilled_locations(world.player))
-    in_pool = len(itempool) + (0 if world.options.start_with_dash else 1)
-    itempool += [world.create_filler() for _ in range(unfilled - in_pool)]
+    itempool += [world.create_filler() for _ in range(unfilled - len(itempool) - dash_in_pool)]
     world.multiworld.itempool += itempool

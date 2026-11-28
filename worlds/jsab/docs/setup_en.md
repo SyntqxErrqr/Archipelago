@@ -48,7 +48,10 @@ checks. Play on Normal or Hardcore.
   BepInEx 5 and the Mono builds don't load it.
 - **My normal save is gone.** It isn't. While connected, the game plays on the slot's own save. Restart the game and
   click **Play without Archipelago** to play your normal save.
-- **A chapter is locked in Story mode.** You need another Progressive Chapter (or the Lost Chapter Key). The panel shows
-  how many chapters you have opened. Cutscenes on the story map still play; only the levels themselves are locked.
+- **A level is locked in Story mode.** It opens with your next Progressive Level (or Progressive Lost Chapter Level);
+  the message on screen says which one, and the panel shows how many levels are open. Cutscenes on the story map still
+  play; only the levels themselves are locked.
+- **"This Story slot was made with an older jsab.apworld".** Story mode changed in jsab.apworld 0.2.0 (levels open one
+  at a time instead of whole chapters). Generate the game again with 0.2.0 or newer. Playlist slots still work.
 - **A console window opens with the game.** That is BepInEx's log window. Set `Enabled = false` under
   `[Logging.Console]` in `BepInEx\config\BepInEx.cfg` to hide it; the log is still written to `BepInEx\LogOutput.log`.

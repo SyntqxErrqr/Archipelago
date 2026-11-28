@@ -1,11 +1,15 @@
 from ..data import (
     BEAT_SHARD,
     DASH,
-    LOST_CHAPTER_KEY,
+    FINALE,
+    LOST_CHAPTER_SPOTS,
+    MAIN_STORY_SPOTS,
     PLAYLIST_SONGS,
-    PROGRESSIVE_CHAPTER,
+    PROGRESSIVE_LEVEL,
+    PROGRESSIVE_LOST_LEVEL,
     SONG_BY_GAME_ID,
     TUTORIAL_CHECKPOINT_NAMES,
+    TUTORIAL_SONG,
     clear_location_name,
     s_rank_location_name,
 )
@@ -24,35 +28,39 @@ class TestStoryDefaults(JSABTestBase):
 
     def test_items(self) -> None:
         names = self.world_item_names()
-        self.assertEqual(names.count(PROGRESSIVE_CHAPTER), 5)
-        self.assertNotIn(LOST_CHAPTER_KEY, names)
+        # One per level spot after the tutorial.
+        self.assertEqual(names.count(PROGRESSIVE_LEVEL), 25)
+        self.assertNotIn(PROGRESSIVE_LOST_LEVEL, names)
+        self.assertNotIn(PROGRESSIVE_LEVEL, self.precollected_names())
         self.assertNotIn(DASH, names)
         self.assertIn(DASH, self.precollected_names())
         self.assertNotIn(BEAT_SHARD, names)
         for song in PLAYLIST_SONGS:
             self.assertNotIn(song.name, names)
 
-    def test_tutorial_open_from_the_start(self) -> None:
-        self.assertTrue(self.can_reach_location(clear_location_name(SONG_BY_GAME_ID["tuto_0"])))
-        self.assertTrue(self.can_reach_location(s_rank_location_name(SONG_BY_GAME_ID["tuto_boss"])))
+    def test_only_the_tutorial_is_open_from_the_start(self) -> None:
+        self.assertTrue(self.can_reach_location(clear_location_name(TUTORIAL_SONG)))
+        self.assertTrue(self.can_reach_location(TUTORIAL_CHECKPOINT_NAMES[-1]))
+        chronos = SONG_BY_GAME_ID["tuto_1"]
+        self.assertFalse(self.can_reach_location(clear_location_name(chronos)))
+        self.assertFalse(self.can_reach_location(s_rank_location_name(chronos)))
 
-    def test_chapters_open_in_order(self) -> None:
-        # collect_by_name would take all five copies at once, so collect them one at a time.
-        chapters = self.get_items_by_name(PROGRESSIVE_CHAPTER)
-        new_game = clear_location_name(SONG_BY_GAME_ID["paradise_Boss"])
-        barracuda = clear_location_name(SONG_BY_GAME_ID["volcanEntryBoss"])
-        self.assertFalse(self.can_reach_location(new_game))
-        self.collect(chapters[0])
-        self.assertTrue(self.can_reach_location(new_game))
-        self.assertFalse(self.can_reach_location(barracuda))
-        self.collect(chapters[1])
-        self.assertTrue(self.can_reach_location(barracuda))
+    def test_levels_open_one_at_a_time_in_order(self) -> None:
+        # collect_by_name would take every copy at once, so collect them one at a time.
+        levels = self.get_items_by_name(PROGRESSIVE_LEVEL)
+        for count, spot in enumerate(MAIN_STORY_SPOTS[1:-1], start=1):
+            name = clear_location_name(spot)
+            self.assertFalse(self.can_reach_location(name), name)
+            self.collect(levels[count - 1])
+            self.assertTrue(self.can_reach_location(name), name)
+            if spot.in_playlist:
+                self.assertTrue(self.can_reach_location(s_rank_location_name(spot)), spot.name)
 
-    def test_goal_needs_every_chapter(self) -> None:
-        chapters = self.get_items_by_name(PROGRESSIVE_CHAPTER)
-        self.collect(chapters[:4])
+    def test_goal_needs_every_level(self) -> None:
+        levels = self.get_items_by_name(PROGRESSIVE_LEVEL)
+        self.collect(levels[:-1])
         self.assertBeatable(False)
-        self.collect(chapters[4])
+        self.collect(levels[-1])
         self.assertBeatable(True)
 
     def test_slot_data(self) -> None:
@@ -63,29 +71,44 @@ class TestStoryDefaults(JSABTestBase):
         self.assertEqual(len(slot_data["chapters"]), 7)
         self.assertEqual(slot_data["tutorial_checkpoints"], 9)
         self.assertTrue(slot_data["start_with_dash"])
+        self.assertEqual(slot_data["main_story_spots"], [spot.game_id for spot in MAIN_STORY_SPOTS])
+        self.assertEqual(slot_data["lost_chapter_spots"], [spot.game_id for spot in LOST_CHAPTER_SPOTS])
+        self.assertEqual(slot_data["spot_songs"], {spot.game_id: spot.game_id for spot in MAIN_STORY_SPOTS})
+        self.assertEqual(slot_data["item_ids"]["progressive_level"], 6)
+        self.assertEqual(slot_data["item_ids"]["progressive_lost_level"], 7)
 
 
 class TestStoryLostChapterIncluded(JSABTestBase):
     options = {"mode": "story", "lost_chapter": "include"}
 
-    def test_lost_chapter_locations_and_key(self) -> None:
+    def test_lost_chapter_locations_and_items(self) -> None:
         self.assertEqual(len(self.location_names()), 30 + 29 + 9)
-        self.assertEqual(self.world_item_names().count(LOST_CHAPTER_KEY), 1)
+        self.assertEqual(self.world_item_names().count(PROGRESSIVE_LOST_LEVEL), 5)
+        self.assertEqual(self.world.fill_slot_data()["spot_songs"]["lost_chapter_1"], "lost_chapter_1")
 
-    def test_lost_chapter_needs_key(self) -> None:
-        spider_dance = clear_location_name(SONG_BY_GAME_ID["lost_chapter_boss"])
+    def test_lost_chapter_levels_open_in_order(self) -> None:
+        lost_levels = self.get_items_by_name(PROGRESSIVE_LOST_LEVEL)
+        first = clear_location_name(LOST_CHAPTER_SPOTS[0])
+        spider_dance = clear_location_name(LOST_CHAPTER_SPOTS[-1])
+        self.assertFalse(self.can_reach_location(first))
+        self.collect(lost_levels[0])
+        self.assertTrue(self.can_reach_location(first))
         self.assertFalse(self.can_reach_location(spider_dance))
-        self.collect_by_name(LOST_CHAPTER_KEY)
+        self.collect(lost_levels[1:])
         self.assertTrue(self.can_reach_location(spider_dance))
+
+    def test_lost_chapter_not_needed_to_win(self) -> None:
+        self.collect_by_name(PROGRESSIVE_LEVEL)
+        self.assertBeatable(True)
 
 
 class TestStoryLostChapterRequired(JSABTestBase):
     options = {"mode": "story", "lost_chapter": "require"}
 
     def test_goal_needs_lost_chapter(self) -> None:
-        self.collect_by_name(PROGRESSIVE_CHAPTER)
+        self.collect_by_name(PROGRESSIVE_LEVEL)
         self.assertBeatable(False)
-        self.collect_by_name(LOST_CHAPTER_KEY)
+        self.collect_by_name(PROGRESSIVE_LOST_LEVEL)
         self.assertBeatable(True)
 
 
@@ -94,8 +117,52 @@ class TestStoryNoLostChapterNoRanks(JSABTestBase):
 
     def test_only_main_story_clears(self) -> None:
         self.assertEqual(len(self.location_names()), 25)
-        self.assertNotIn(LOST_CHAPTER_KEY, self.world_item_names())
-        self.assertNotIn(clear_location_name(SONG_BY_GAME_ID["lost_chapter_1"]), self.location_names())
+        self.assertNotIn(PROGRESSIVE_LOST_LEVEL, self.world_item_names())
+        self.assertNotIn(clear_location_name(LOST_CHAPTER_SPOTS[0]), self.location_names())
+        # One location per level and one Progressive Level per level after the tutorial: it just fits.
+        self.assertEqual(self.world_item_names().count(PROGRESSIVE_LEVEL), 25)
+
+
+class TestStoryNoRoomForDash(JSABTestBase):
+    options = {"mode": "story", "s_rank_checks": False, "tutorial_checkpoints": False, "start_with_dash": False}
+    # Dash can only be shuffled in a multiworld here, and someone else has to have a place for it.
+    players = 2
+    other_player_options = {"mode": "story"}
+    # The built-in fill tests assume a single player who can check something before receiving any items.
+    run_default_tests = False
+
+    def test_starts_with_a_level_open_to_make_room(self) -> None:
+        self.assertEqual(len(self.location_names()), 25)
+        self.assertIn(DASH, self.world_item_names())
+        self.assertEqual(self.world_item_names().count(PROGRESSIVE_LEVEL), 24)
+        self.assertEqual(self.precollected_names().count(PROGRESSIVE_LEVEL), 1)
+
+
+class TestStoryShuffledSongs(JSABTestBase):
+    options = {"mode": "story", "shuffle_story_songs": True, "lost_chapter": "include"}
+
+    def test_every_song_plays_exactly_once(self) -> None:
+        spot_songs = self.world.spot_songs
+        spots = MAIN_STORY_SPOTS + LOST_CHAPTER_SPOTS
+        self.assertEqual(set(spot_songs), set(spots))
+        self.assertEqual(sorted(spot_songs.values()), sorted(spots))
+        self.assertIs(spot_songs[TUTORIAL_SONG], TUTORIAL_SONG)
+        self.assertIs(spot_songs[FINALE], FINALE)
+        self.assertTrue(any(spot is not song for spot, song in spot_songs.items()), "nothing was shuffled")
+
+    def test_clear_follows_the_song_played_at_the_spot(self) -> None:
+        levels = self.get_items_by_name(PROGRESSIVE_LEVEL)
+        for count, spot in enumerate(MAIN_STORY_SPOTS[1:-1], start=1):
+            song = self.world.spot_songs[spot]
+            name = clear_location_name(song)
+            self.assertFalse(self.can_reach_location(name), f"{spot.name} plays {song.name}")
+            self.collect(levels[count - 1])
+            self.assertTrue(self.can_reach_location(name), f"{spot.name} plays {song.name}")
+
+    def test_slot_data_lists_the_shuffle(self) -> None:
+        slot_data = self.world.fill_slot_data()
+        expected = {spot.game_id: song.game_id for spot, song in self.world.spot_songs.items()}
+        self.assertEqual(slot_data["spot_songs"], expected)
 
 
 class TestStoryDashShuffled(JSABTestBase):
@@ -110,7 +177,7 @@ class TestStoryDashShuffled(JSABTestBase):
             self.assertTrue(self.can_reach_location(name), name)
         for name in TUTORIAL_CHECKPOINT_NAMES[6:]:
             self.assertFalse(self.can_reach_location(name), name)
-        corrupted = clear_location_name(SONG_BY_GAME_ID["tuto_0"])
+        corrupted = clear_location_name(TUTORIAL_SONG)
         self.assertFalse(self.can_reach_location(corrupted))
         self.collect_by_name(DASH)
         self.assertTrue(self.can_reach_location(corrupted))

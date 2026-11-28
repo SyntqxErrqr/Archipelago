@@ -18,12 +18,13 @@ from .data import (
     DASH,
     DIFFICULTY_NAMES,
     FINALE,
+    FIXED_SPOTS,
     GAME_NAME,
     ITEM_ID_BEAT_POINTS,
     ITEM_ID_BEAT_SHARD,
     ITEM_ID_DASH,
-    ITEM_ID_LOST_CHAPTER_KEY,
-    ITEM_ID_PROGRESSIVE_CHAPTER,
+    ITEM_ID_PROGRESSIVE_LEVEL,
+    ITEM_ID_PROGRESSIVE_LOST_LEVEL,
     ITEM_ID_SONG_BASE,
     ITEM_NAME_TO_ID,
     LOCATION_ID_CLEAR_BASE,
@@ -31,10 +32,11 @@ from .data import (
     LOCATION_ID_TUTORIAL_CHECKPOINT_BASE,
     LOCATION_NAME_TO_ID,
     LOST_CHAPTER,
-    LOST_CHAPTER_KEY,
-    MAIN_CHAPTERS,
+    LOST_CHAPTER_SPOTS,
+    MAIN_STORY_SPOTS,
     PLAYLIST_SONGS,
-    PROGRESSIVE_CHAPTER,
+    PROGRESSIVE_LEVEL,
+    PROGRESSIVE_LOST_LEVEL,
     SONG_BY_GAME_ID,
     SONG_GROUPS,
     SONGS,
@@ -43,7 +45,6 @@ from .data import (
     TUTORIAL_SONG,
     VICTORY,
     Song,
-    chapter_songs,
     clear_location_name,
     s_rank_location_name,
 )
@@ -65,7 +66,7 @@ def expand_song_names(names: Iterable[str]) -> set[str]:
 class JSABWorld(World):
     """
     Just Shapes & Beats is a musical bullet hell: dodge pink shapes that move to the beat across a story of 30-odd
-    songs. In this randomizer, Story mode chapters or Playlist songs are locked until the multiworld sends them,
+    songs. In this randomizer, Story mode levels or Playlist songs are locked until the multiworld sends them,
     and clearing songs or S-ranking them sends items back out.
     """
 
@@ -87,6 +88,8 @@ class JSABWorld(World):
     goal_song: Song | None
     beat_shards_placed: int
     beat_shards_required: int
+    spot_songs: dict[Song, Song]
+    """Story mode: the song each level spot in this seed plays. Every spot plays its own song unless shuffled."""
 
     @property
     def is_story(self) -> bool:
@@ -98,6 +101,7 @@ class JSABWorld(World):
         self.goal_song = None
         self.beat_shards_placed = 0
         self.beat_shards_required = 0
+        self.spot_songs = {}
 
         passthrough = getattr(self.multiworld, "re_gen_passthrough", {}).get(self.game)
         if passthrough:
@@ -113,8 +117,23 @@ class JSABWorld(World):
             else:
                 self.multiworld.early_items[self.player][DASH] = 1
 
-        if not self.is_story:
+        if self.is_story:
+            self.pick_spot_songs()
+        else:
             self.pick_playlist()
+
+    def story_spots(self) -> tuple[Song, ...]:
+        """The level spots in this seed: the main story, then the Lost Chapter if it's included."""
+        return MAIN_STORY_SPOTS + (LOST_CHAPTER_SPOTS if self.options.lost_chapter else ())
+
+    def pick_spot_songs(self) -> None:
+        spots = self.story_spots()
+        self.spot_songs = {spot: spot for spot in spots}
+        if self.options.shuffle_story_songs:
+            movable = [spot for spot in spots if spot not in FIXED_SPOTS]
+            songs = movable.copy()
+            self.random.shuffle(songs)
+            self.spot_songs.update(zip(movable, songs))
 
     def has_locations_without_dash(self) -> bool:
         """Only the start of the tutorial can be checked without dashing."""
@@ -133,6 +152,9 @@ class JSABWorld(World):
         self.options.start_with_dash.value = int(slot_data.get("start_with_dash", True))
         self.options.tutorial_checkpoints.value = int(slot_data.get("tutorial_checkpoints", 0) > 0)
         if self.is_story:
+            spot_songs: dict[str, str] = slot_data["spot_songs"]
+            self.options.shuffle_story_songs.value = int(any(spot != song for spot, song in spot_songs.items()))
+            self.spot_songs = {SONG_BY_GAME_ID[spot]: SONG_BY_GAME_ID[song] for spot, song in spot_songs.items()}
             return
         self.song_pool = [SONG_BY_GAME_ID[game_id] for game_id in slot_data["song_pool"]]
         self.starting_songs = [SONG_BY_GAME_ID[game_id] for game_id in slot_data["starting_songs"]]
@@ -181,11 +203,8 @@ class JSABWorld(World):
     def checked_songs(self) -> list[Song]:
         """Songs that have locations in this seed."""
         if self.is_story:
-            return [song for chapter in self.story_chapters() for song in chapter_songs(chapter)]
+            return list(self.story_spots())
         return [song for song in self.song_pool if song is not self.goal_song]
-
-    def story_chapters(self) -> list:
-        return [*MAIN_CHAPTERS, *([LOST_CHAPTER] if self.options.lost_chapter else [])]
 
     def location_names_for(self, song: Song) -> list[str]:
         names = [] if song is FINALE else [clear_location_name(song)]
@@ -213,24 +232,33 @@ class JSABWorld(World):
         region.add_locations({name: LOCATION_NAME_TO_ID[name] for name in names}, locations.JSABLocation)
 
     def create_story_regions(self, menu: Region) -> None:
-        for chapter in self.story_chapters():
-            region = Region(chapter.name, self.player, self.multiworld)
-            self.multiworld.regions.append(region)
-            if chapter is LOST_CHAPTER:
-                self.create_entrance(menu, region, Has(LOST_CHAPTER_KEY))
-                region.add_event(LOST_CHAPTER_COMPLETE, LOST_CHAPTER_COMPLETE,
-                                 location_type=locations.JSABLocation, item_type=items.JSABItem)
-            else:
-                # Chapters open strictly in story order, so chapter N needs N Progressive Chapters.
-                self.create_entrance(menu, region, Has(PROGRESSIVE_CHAPTER, count=chapter.index))
-            if chapter.index == TUTORIAL_SONG.chapter:
-                region.add_locations({name: LOCATION_NAME_TO_ID[name] for name in self.tutorial_checkpoint_names()},
-                                     locations.JSABLocation)
-            for song in chapter_songs(chapter):
-                self.add_song_locations(region, song)
-            if FINALE.chapter == chapter.index:
-                region.add_event(clear_location_name(FINALE), STORY_COMPLETE,
-                                 location_type=locations.JSABLocation, item_type=items.JSABItem)
+        # The story map is a single path, so reaching a level spot means clearing every spot before it. Opening a spot
+        # takes one Progressive Level per spot before it, which opens those earlier spots too.
+        for index, spot in enumerate(MAIN_STORY_SPOTS):
+            self.create_spot_region(menu, spot, Has(PROGRESSIVE_LEVEL, count=index) if index else None)
+        if self.options.lost_chapter:
+            region = None
+            for index, spot in enumerate(LOST_CHAPTER_SPOTS):
+                region = self.create_spot_region(menu, spot, Has(PROGRESSIVE_LOST_LEVEL, count=index + 1))
+            assert region is not None
+            region.add_event(LOST_CHAPTER_COMPLETE, LOST_CHAPTER_COMPLETE,
+                             location_type=locations.JSABLocation, item_type=items.JSABItem)
+
+    def create_spot_region(self, menu: Region, spot: Song, rule: Has | None) -> Region:
+        assert spot.chapter is not None
+        region = Region(f"{CHAPTERS[spot.chapter].name}: {spot.name}", self.player, self.multiworld)
+        self.multiworld.regions.append(region)
+        self.create_entrance(menu, region, rule)
+        if spot is TUTORIAL_SONG:
+            region.add_locations({name: LOCATION_NAME_TO_ID[name] for name in self.tutorial_checkpoint_names()},
+                                 locations.JSABLocation)
+        song = self.spot_songs[spot]
+        if song is FINALE:
+            region.add_event(clear_location_name(FINALE), STORY_COMPLETE,
+                             location_type=locations.JSABLocation, item_type=items.JSABItem)
+        else:
+            self.add_song_locations(region, song)
+        return region
 
     def create_playlist_regions(self, menu: Region) -> None:
         for song in self.checked_songs():
@@ -281,7 +309,11 @@ class JSABWorld(World):
             "chapter_names": [chapter.name for chapter in CHAPTERS],
             "lost_chapter_index": LOST_CHAPTER.index,
             "finale": FINALE.game_id,
-            "lost_chapter_boss": chapter_songs(LOST_CHAPTER)[-1].game_id,
+            "lost_chapter_boss": LOST_CHAPTER_SPOTS[-1].game_id,
+            # Story level spots in map order, and the song each spot in this seed plays (by game id).
+            "main_story_spots": [spot.game_id for spot in MAIN_STORY_SPOTS],
+            "lost_chapter_spots": [spot.game_id for spot in LOST_CHAPTER_SPOTS],
+            "spot_songs": {spot.game_id: song.game_id for spot, song in self.spot_songs.items()},
             "song_pool": [song.game_id for song in self.song_pool],
             "starting_songs": [song.game_id for song in self.starting_songs],
             "goal_song": self.goal_song.game_id if self.goal_song else None,
@@ -290,8 +322,8 @@ class JSABWorld(World):
             "songs": {song.game_id: song.number for song in SONGS},
             "location_id_bases": {"clear": LOCATION_ID_CLEAR_BASE, "s_rank": LOCATION_ID_S_RANK_BASE},
             "item_ids": {
-                "progressive_chapter": ITEM_ID_PROGRESSIVE_CHAPTER,
-                "lost_chapter_key": ITEM_ID_LOST_CHAPTER_KEY,
+                "progressive_level": ITEM_ID_PROGRESSIVE_LEVEL,
+                "progressive_lost_level": ITEM_ID_PROGRESSIVE_LOST_LEVEL,
                 "beat_shard": ITEM_ID_BEAT_SHARD,
                 "beat_points": ITEM_ID_BEAT_POINTS,
                 "dash": ITEM_ID_DASH,
@@ -316,6 +348,11 @@ class JSABWorld(World):
                              f"minimum difficulty {DIFFICULTY_NAMES[self.options.minimum_difficulty.value - 1]}, "
                              f"{'starts with Dash' if self.options.start_with_dash else 'Dash shuffled'}\n")
         if self.is_story:
+            moved = [(spot, song) for spot, song in self.spot_songs.items() if spot is not song]
+            if moved:
+                spoiler_handle.write(f"{player_name}'s shuffled story songs (level spot: song played there):\n")
+                for spot, song in moved:
+                    spoiler_handle.write(f"    {spot.name}: {song.name}\n")
             return
         assert self.goal_song is not None
         spoiler_handle.write(f"{player_name}'s starting songs: "

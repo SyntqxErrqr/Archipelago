@@ -1,7 +1,8 @@
 from ..data import (
     BEAT_SHARD,
     PLAYLIST_SONGS,
-    PROGRESSIVE_CHAPTER,
+    PROGRESSIVE_LEVEL,
+    PROGRESSIVE_LOST_LEVEL,
     SONG_BY_NAME,
     SONG_GROUPS,
     clear_location_name,
@@ -34,7 +35,8 @@ class TestPlaylistDefaults(JSABTestBase):
             self.assertEqual(names.count(song.name), 1, song.name)
         assert self.world.goal_song is not None
         self.assertNotIn(self.world.goal_song.name, names)
-        self.assertNotIn(PROGRESSIVE_CHAPTER, names)
+        self.assertNotIn(PROGRESSIVE_LEVEL, names)
+        self.assertNotIn(PROGRESSIVE_LOST_LEVEL, names)
 
     def test_shards(self) -> None:
         self.assertEqual(self.world_item_names().count(BEAT_SHARD), 20)
